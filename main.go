@@ -20,27 +20,27 @@ type cache struct {
 	tables []table
 }
 
-type XMLEntry struct {
-	XMLName xml.Name `xml:"entry"`;
-	Key     string   `xml:"key"`;
-	Value   string   `xml:"value"`;
+type Person struct {
+	XMLName xml.Name `xml:"person"`;
+	Name    string   `xml:"name"`;
+	Age     int   `xml:"age"`;
 }
 
-type XMLEntries struct {
-	XMLName xml.Name   `xml:"entries"`;
-	Entries []XMLEntry `xml:"entry"`;
+type People struct {
+	XMLName xml.Name   `xml:"people"`;
+	People  []Person `xml:"person"`;
 }
 
-func ReadEntries(reader io.Reader) ([]XMLEntry, error) {
-	var xmlValues XMLEntries
-	if err := xml.NewDecoder(reader).Decode(&xmlValues); err != nil {
+func ReadEntries(reader io.Reader) ([]Person, error) {
+	var people People
+	if err := xml.NewDecoder(reader).Decode(&people); err != nil {
 		return nil, err
 	}
 
-	return xmlValues.Entries, nil
+	return people.People, nil
 }
 
-func FlushDatabase(writer io.Writer, xmlEntries XMLEntries) (error) {
+func FlushDatabase(writer io.Writer, xmlEntries People) (error) {
 	if err := xml.NewEncoder(writer).Encode(xmlEntries); err != nil {
 		return err
 	}
@@ -285,11 +285,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	a := XMLEntry{Key: "Vasya", Value: "25"}
+	a := Person{Name: "Vasya", Age: 25}
 
 	entries = append(entries, a)
 
-	res := XMLEntries{Entries: entries}
+	res := People{People: entries}
 	fileToWrite, err := os.Create("result.xml")
 
 	if err != nil {
@@ -298,10 +298,10 @@ func main() {
 	}
 	FlushDatabase(fileToWrite, res)
 
-	for _, entry := range entries {
+	for _, person := range entries {
 		// index is the index where we are
 		// element is the element from someSlice for where we are
-		fmt.Printf("Key: %s  Value: %s\n", entry.Key, entry.Value)
+		fmt.Printf("Name: %6s  Age: %2d\n", person.Name, person.Age)
 	}
 	// Display The first strap
 }
