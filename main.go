@@ -11,11 +11,41 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"encoding/xml"
+	"path/filepath"
 	"sync"
 )
 
 type cache struct {
 	tables []table
+}
+
+type XMLEntry struct {
+	XMLName xml.Name `xml:"entry"`;
+	Key     string   `xml:"key"`;
+	Value   string   `xml:"value"`;
+}
+
+type XMLEntries struct {
+	XMLName xml.Name   `xml:"entries"`;
+	Entries []XMLEntry `xml:"entry"`;
+}
+
+func ReadEntries(reader io.Reader) ([]XMLEntry, error) {
+	var xmlValues XMLEntries
+	if err := xml.NewDecoder(reader).Decode(&xmlValues); err != nil {
+		return nil, err
+	}
+
+	return xmlValues.Entries, nil
+}
+
+func FlushDatabase(writer io.Writer, xmlEntries XMLEntries) (error) {
+	if err := xml.NewEncoder(writer).Encode(xmlEntries); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *cache) get(name string) *table {
@@ -80,30 +110,30 @@ const (
 	CONN_TYPE = "tcp"
 )
 
-func main() {
-	// Listen for incoming connections.
-	c := cache{}
-	l, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
-	if err != nil {
-		fmt.Println("Error listening:", err.Error())
-		os.Exit(1)
-	}
-	// Close the listener when the application closes.
-	defer l.Close()
-	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
-	for {
-		// Listen for an incoming connection.
-		conn, err := l.Accept()
-		fmt.Println("accept")
-
-		if err != nil {
-			fmt.Println("Error accepting: ", err.Error())
-			os.Exit(1)
-		}
-		// Handle connections in a new goroutine.
-		go handleConnection(conn, &c)
-	}
-}
+//func main() {
+//	// Listen for incoming connections.
+//	c := cache{}
+//	l, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
+//	if err != nil {
+//		fmt.Println("Error listening:", err.Error())
+//		os.Exit(1)
+//	}
+//	// Close the listener when the application closes.
+//	defer l.Close()
+//	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
+//	for {
+//		// Listen for an incoming connection.
+//		conn, err := l.Accept()
+//		fmt.Println("accept")
+//
+//		if err != nil {
+//			fmt.Println("Error accepting: ", err.Error())
+//			os.Exit(1)
+//		}
+//		// Handle connections in a new goroutine.
+//		go handleConnection(conn, &c)
+//	}
+//}
 
 // Handles incoming requests.
 func handleConnection(conn net.Conn, c *cache) {
@@ -214,7 +244,7 @@ func (t *table) select_(key string) []string {
 func (t *table) delete_(key string) {
 	for index := 0; index < len(*t.data); index++ {
 		if (*t.data)[index][0] == key {
-			*t.data = append((*t.data)[:index], (*t.data)[index+1:]...)
+			*t.data = append((*t.data)[:index], (*t.data)[index + 1:]...)
 		}
 	}
 	go t.save()
@@ -228,4 +258,50 @@ func (t *table) update_(key string, value string) {
 
 	}
 	go t.save()
+}
+
+func main() {
+	// Build the location of the straps.xml file
+	// filepath.Abs appends the file name to the default working directly
+	strapsFilePath, err := filepath.Abs("entries.xml")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// Open the container file
+	file, err := os.Open(strapsFilePath)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// Parse entries
+	entries, err := ReadEntries(file)
+	file.Close()
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	a := XMLEntry{Key: "Vasya", Value: "25"}
+
+	entries = append(entries, a)
+
+	res := XMLEntries{Entries: entries}
+	fileToWrite, err := os.Create("result.xml")
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	FlushDatabase(fileToWrite, res)
+
+	for _, entry := range entries {
+		// index is the index where we are
+		// element is the element from someSlice for where we are
+		fmt.Printf("Key: %s  Value: %s\n", entry.Key, entry.Value)
+	}
+	// Display The first strap
 }
