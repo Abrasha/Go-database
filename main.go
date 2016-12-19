@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 type cache struct {
@@ -42,35 +43,35 @@ func (c *cache) get(name string) *table {
 			row_data := []string{record[0], record[1]}
 			data = append(data, row_data)
 		}
-		t := table{name: name, data: &data, isLocked: false}
+		t := table{name: name, data: &data}
 		c.tables = append(c.tables, t)
 		return &t
 	}
 	//Ну и если ни черта не вышло создаем пустую базу
-	t := table{name: name, data: new([][]string), isLocked: false}
+	t := table{name: name, data: new([][]string)}
 	c.tables = append(c.tables, t)
 	fmt.Println("table returned")
 	return &t
 }
 
 type table struct {
-	isLocked bool
+	isLocked sync.Mutex
 	name     string
 	data     *[][]string
 }
 
 func (t *table) save() {
-	for t.isLocked {
+	//	for t.isLocked {
 
-	}
+	//	}
 
-	t.isLocked = true
+	t.isLocked.Lock()
 	file, _ := os.Create(t.name)
 	defer file.Close()
 	for _, row := range *t.data {
 		file.WriteString(row[0] + "," + row[1] + "\n")
 	}
-	t.isLocked = false
+	t.isLocked.Unlock()
 }
 
 const (
