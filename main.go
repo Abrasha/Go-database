@@ -1,24 +1,18 @@
-// Lab2_file_database project main.go
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/csv"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net"
 	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
 	"sync"
+	"strings"
+	"regexp"
+	"bytes"
+	"path/filepath"
+	"log"
+	"strconv"
 )
-
-type cache struct {
-	tables []table
-}
 
 type Person struct {
 	XMLName xml.Name `xml:"person"`
@@ -35,77 +29,43 @@ type People struct {
 	People  []Person `xml:"person"`
 }
 
-func ReadEntries(reader io.Reader) ([]Person, error) {
+type FileSystem struct {
+	lock             sync.Mutex
+	DatabaseFilePath string
+}
+
+func (f FileSystem) ReadEntries() ([]Person, error) {
+
+	file, _ := os.Open(f.DatabaseFilePath)
+
 	var people People
-	if err := xml.NewDecoder(reader).Decode(&people); err != nil {
-		return nil, err
+	if err := xml.NewDecoder(file).Decode(&people); err != nil {
+		handleError(err)
 	}
+
+	file.Close()
 
 	return people.People, nil
 }
 
-func FlushDatabase(writer io.Writer, xmlEntries People) error {
-	if err := xml.NewEncoder(writer).Encode(xmlEntries); err != nil {
+func (f FileSystem)FlushDatabase(people People) error {
+
+	os.Remove(f.DatabaseFilePath)
+	file, _ := os.Create(f.DatabaseFilePath)
+
+	fmt.Println("Locking writable database")
+	f.lock.Lock()
+	fmt.Println("Locked writable database")
+	if err := xml.NewEncoder(file).Encode(people); err != nil {
 		return err
 	}
+	fmt.Println("Unlocking writable database")
+	f.lock.Unlock()
+	fmt.Println("Unlocked writable database")
+
+	file.Close()
 
 	return nil
-}
-
-func (c *cache) get(name string) *table {
-	//Проверяем есть ли таблицца на оперативке
-	fmt.Println("Try to get table")
-	for _, t := range c.tables {
-		if t.name == name {
-			fmt.Println("table find in cache")
-			return &t
-		}
-	}
-	//Пытаемся загрузить базу из файлововой системы
-	f, err := os.Open(name)
-	if err == nil {
-		data := make([][]string, 0, 0)
-		r := csv.NewReader(bufio.NewReader(f))
-
-		for {
-			record, err := r.Read()
-			// Stop at EOF.
-			if err == io.EOF {
-				break
-			}
-
-			row_data := []string{record[0], record[1]}
-			data = append(data, row_data)
-		}
-		t := table{name: name, data: &data}
-		c.tables = append(c.tables, t)
-		return &t
-	}
-	//Ну и если ни черта не вышло создаем пустую базу
-	t := table{name: name, data: new([][]string)}
-	c.tables = append(c.tables, t)
-	fmt.Println("table returned")
-	return &t
-}
-
-type table struct {
-	isLocked sync.Mutex
-	name     string
-	data     *[][]string
-}
-
-func (t *table) save() {
-	//	for t.isLocked {
-
-	//	}
-
-	t.isLocked.Lock()
-	file, _ := os.Create(t.name)
-	defer file.Close()
-	for _, row := range *t.data {
-		file.WriteString(row[0] + "," + row[1] + "\n")
-	}
-	t.isLocked.Unlock()
 }
 
 const (
@@ -114,136 +74,51 @@ const (
 	CONN_TYPE = "tcp"
 )
 
-//func main() {
-//	// Listen for incoming connections.
-//	c := cache{}
-//	l, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
-//	if err != nil {
-//		fmt.Println("Error listening:", err.Error())
-//		os.Exit(1)
-//	}
-//	// Close the listener when the application closes.
-//	defer l.Close()
-//	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
-//	for {
-//		// Listen for an incoming connection.
-//		conn, err := l.Accept()
-//		fmt.Println("accept")
-//
-//		if err != nil {
-//			fmt.Println("Error accepting: ", err.Error())
-//			os.Exit(1)
-//		}
-//		// Handle connections in a new goroutine.
-//		go handleConnection(conn, &c)
-//	}
-//}
+func main() {
+	databaseFilePath, err := filepath.Abs("people.xml")
+	handleError(err)
+
+	fmt.Println("Init file system")
+	fileSystem := FileSystem{DatabaseFilePath: databaseFilePath}
+	fmt.Println("Reading saved entries")
+	entries, _ := fileSystem.ReadEntries()
+	p := People{People: entries}
+
+	l, err := net.Listen(CONN_TYPE, CONN_HOST + ":" + CONN_PORT)
+	handleError(err)
+	// Close the listener when the application closes.
+	defer l.Close()
+	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
+	for {
+		// Listen for an incoming connection.
+		conn, err := l.Accept()
+		fmt.Println("accept")
+		handleError(err)
+		// Handle connections in a new goroutine.
+		go handleConnection(conn, &fileSystem, &p)
+	}
+}
 
 // Handles incoming requests.
-func handleConnection(conn net.Conn, c *cache) {
+func handleConnection(conn net.Conn, c *FileSystem, p*People) {
 	// Make a buffer to hold incoming data.
 	var buf [512]byte
 	empty_string := ""
 	for {
 		copy(buf[:], empty_string) //make  buffer empty
 		_, err := conn.Read(buf[0:])
-		if err != nil {
-			return
-		}
+		handleError(err)
 		n := bytes.Index(buf[:], []byte{0})
 		s := string(buf[:n])
-		go handleRequest(s, c, conn)
+		go handleRequest(s, c, conn, p)
 	}
 }
 
-func handleRequest(command string, c *cache, conn net.Conn) {
-	fmt.Println("handle request: " + command)
-
-	params := strings.Fields(command)
-	// remove empty entries and remove whitespaces
-	fmt.Println(params)
-	fmt.Println(params[0])
-	// remove empty entries and remove whitespaces
-	switch strings.ToLower(params[0]) {
-	case "exit":
-		os.Exit(0)
-	case "insert":
-		fmt.Println("switching")
-
-		fmt.Println("insert")
-		insert_regex := regexp.MustCompile(`^insert\s+\w+\s+\w+\s+into\s+[A-z]+[A-z_0-9]*`)
-		if insert_regex.MatchString(command) {
-			t := c.get(params[4])
-			t.insert_(params[1], params[2])
-
-		} else {
-			conn.Write([]byte(string("Your command didn't match the pattern\n")))
-		}
-	case "select":
-		fmt.Println("try to select")
-		select_regex := regexp.MustCompile(`^select\s+\w+\s+from\s+[A-z]+[A-z_0-9]*`)
-		if select_regex.MatchString(command) {
-
-			t := c.get(params[3])
-			data := ""
-			for _, elem := range t.select_(params[1]) {
-				data += elem + " "
-				conn.Write([]byte(string(elem) + " "))
-
-			}
-			conn.Write([]byte("\n"))
-
-			fmt.Println(data + "\n newline was sended")
-		} else {
-			conn.Write([]byte(string("Your command didn't match the pattern\n")))
-		}
-		fmt.Println("select")
-	case "delete":
-		delete_regex := regexp.MustCompile(`^delete\s+\w+\s+in\s+[A-z]+[A-z_0-9]*`)
-		if delete_regex.MatchString(command) {
-			t := c.get(params[3])
-			t.delete_(params[1])
-		} else {
-			conn.Write([]byte(string("Your command didn't match the pattern\n")))
-		}
-		fmt.Println("delete")
-
-	case "update":
-		update_regex := regexp.MustCompile(`^update\s+\w+\s+to\s+\w+\s+in\s+[A-z]+[A-z_0-9]*`)
-		if update_regex.MatchString(command) {
-			t := c.get(params[5])
-			t.update_(params[1], params[3])
-		} else {
-			conn.Write([]byte(string("Your command didn't match the pattern\n")))
-		}
-		fmt.Println("update")
-	default:
-		conn.Write([]byte(string("Your command didn't match the pattern\n")))
+func handleError(e error) {
+	if e != nil {
+		log.Fatal(e)
+		os.Exit(1)
 	}
-}
-
-func (t *table) insert_(key string, value string) {
-	row := []string{key, value}
-	//Возможное место для мютекса
-	fmt.Println(t.data)
-	t.additem(row)
-	fmt.Println(t.data)
-	go t.save()
-}
-func (t *table) additem(value []string) {
-	*t.data = append(*t.data, value)
-}
-
-func (t *table) select_(key string) []string {
-	selecting_data := []string{}
-	fmt.Println(*t.data)
-	for _, row := range *t.data {
-		if row[0] == key {
-			selecting_data = append(selecting_data, row[1])
-		}
-	}
-
-	return selecting_data
 }
 
 func (p *People) selectByKey(name string) []Person {
@@ -278,90 +153,76 @@ func (p *People) addItem(name string, age int) {
 	p.People = append(p.People, human)
 }
 
-func (t *table) delete_(key string) {
-	for index := 0; index < len(*t.data); index++ {
-		if (*t.data)[index][0] == key {
-			*t.data = append((*t.data)[:index], (*t.data)[index + 1:]...)
+const (
+	GET_REGEX = `^get\s+\w+`
+	SET_REGEX = `^set\s+\w+\s+eq\s+-?\d+\s+.*`
+	DELETE_REGEX = `^delete\s+\w+\s+`
+	UPDATE_REGEX = `^update\s+\w+\s+set\s+-?\d+\s+`
+)
+
+func handleRequest(command string, fs *FileSystem, conn net.Conn, p *People) {
+	fmt.Println("handling request: " + command)
+	params := strings.Fields(command)
+	// remove empty entries and remove whitespaces
+	fmt.Println(params)
+	fmt.Println(params[0])
+	// remove empty entries and remove whitespaces
+	switch strings.ToLower(params[0]) {
+	case "exit":
+		os.Exit(0)
+	case "set":
+		fmt.Println("Got 'set' request:")
+		insert_regex := regexp.MustCompile(SET_REGEX)
+		if insert_regex.MatchString(command) {
+			age, err := strconv.Atoi(params[3])
+			handleError(err)
+			p.addItem(params[1], age)
+			go fs.FlushDatabase(*p)
+		} else {
+			conn.Write([]byte(string("Your command didn't match the pattern\n")))
 		}
-	}
-	go t.save()
-}
-
-func (t *table) update_(key string, value string) {
-	for i, row := range *t.data {
-		if row[0] == key {
-			(*t.data)[i][1] = value
+	case "get":
+		fmt.Println("Got 'get' request:")
+		select_regex := regexp.MustCompile(GET_REGEX)
+		if select_regex.MatchString(command) {
+			for _, elem := range p.selectByKey(params[1]) {
+				//data += elem + " "
+				conn.Write([]byte(elem.String() + " "))
+			}
+			conn.Write([]byte("\n"))
+		} else {
+			conn.Write([]byte(string("Your command didn't match the pattern\n")))
+		}
+	case "delete":
+		fmt.Println("Got 'delete' request:")
+		delete_regex := regexp.MustCompile(DELETE_REGEX)
+		if delete_regex.MatchString(command) {
+			p.deleteByKey(params[1])
+			go fs.FlushDatabase(*p)
+		} else {
+			conn.Write([]byte(string("Your command didn't match the pattern\n")))
 		}
 
+	case "update":
+		fmt.Println("Got 'update' request:")
+		update_regex := regexp.MustCompile(UPDATE_REGEX)
+		if update_regex.MatchString(command) {
+			age, err := strconv.Atoi(params[3])
+			handleError(err)
+			p.updateByKey(params[1], age)
+			go fs.FlushDatabase(*p)
+		} else {
+			conn.Write([]byte(string("Your command didn't match the pattern\n")))
+		}
+
+	case "help":
+		fmt.Println("Got 'help' request:")
+		conn.Write([]byte(string("set [name] eq [age]\n")))
+		conn.Write([]byte(string("update [name] set [age]\n")))
+		conn.Write([]byte(string("get [name]\n")))
+		conn.Write([]byte(string("delete [name]\n")))
+	default:
+		fmt.Println("Got wront request:")
+		conn.Write([]byte(string("Your command didn't match the pattern\n")))
 	}
-	go t.save()
-}
-
-func main() {
-	// Build the location of the straps.xml file
-	// filepath.Abs appends the file name to the default working directly
-	strapsFilePath, err := filepath.Abs("entries.xml")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// Open the container file
-	file, err := os.Open(strapsFilePath)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// Parse entries
-	entries, err := ReadEntries(file)
-	file.Close()
-
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	a := Person{Name: "Vasya", Age: 25}
-
-	entries = append(entries, a)
-
-	humans := People{People: entries}
-
-	fmt.Println("Select by key Vasya:")
-	tmp := humans.selectByKey("Vasya")
-	fmt.Println(tmp)
-
-	humans.updateByKey("Vasya", 34)
-	fmt.Println("Update by key Vasya:")
-	tmp = humans.selectByKey("Vasya")
-	fmt.Println(tmp)
-
-	fmt.Println("Delete by key Vasya(should return nothing):")
-	humans.deleteByKey("Vasya")
-	tmp = humans.selectByKey("Vasya")
-	fmt.Println(tmp)
-
-	fmt.Println("Adding with key Vasya:")
-	humans.addItem("Vasya", 25)
-	tmp = humans.selectByKey("Vasya")
-	fmt.Println(tmp)
-
-	res := People{People: entries}
-	fileToWrite, err := os.Create("result.xml")
-
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	FlushDatabase(fileToWrite, res)
-
-	fmt.Println("Printing loaded data from xml:")
-
-	for _, person := range humans.People {
-		// index is the index where we are
-		// element is the element from someSlice for where we are
-		fmt.Println(person)
-	}
-	// Display The first strap
 }

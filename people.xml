@@ -1,0 +1,22 @@
+<people>
+    <person>
+        <name>vava</name>
+        <age>25</age>
+    </person>
+    <person>
+        <name>andrii</name>
+        <age>-4</age>
+    </person>
+    <person>
+        <name>andrii</name>
+        <age>-4</age>
+    </person>
+    <person>
+        <name>qq</name>
+        <age>-5</age>
+    </person>
+    <person>
+        <name>q</name>
+        <age>25</age>
+    </person>
+</people>
