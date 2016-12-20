@@ -26,6 +26,10 @@ type Person struct {
 	Age     int      `xml:"age"`
 }
 
+func (p Person) String() string {
+	return fmt.Sprintf("{Name: %s, Age: %d}", p.Name, p.Age)
+}
+
 type People struct {
 	XMLName xml.Name `xml:"people"`
 	People  []Person `xml:"person"`
@@ -242,12 +246,12 @@ func (t *table) select_(key string) []string {
 	return selecting_data
 }
 
-func (p *People) selectByKey(key name) []int {
-	selecting_data := []int{}
+func (p *People) selectByKey(name string) []Person {
+	selecting_data := []Person{}
 
 	for _, item := range p.People {
 		if item.Name == name {
-			selecting_data = append(selecting_data, item.Age)
+			selecting_data = append(selecting_data, item)
 		}
 	}
 	return selecting_data
@@ -256,7 +260,7 @@ func (p *People) selectByKey(key name) []int {
 func (p *People) deleteByKey(name string) {
 	for index := 0; index < len(p.People); index++ {
 		if p.People[index].Name == name {
-			p.People = append((p.People)[:index], (p.People)[index+1:]...)
+			p.People = append((p.People)[:index], (p.People)[index + 1:]...)
 		}
 	}
 }
@@ -277,7 +281,7 @@ func (p *People) addItem(name string, age int) {
 func (t *table) delete_(key string) {
 	for index := 0; index < len(*t.data); index++ {
 		if (*t.data)[index][0] == key {
-			*t.data = append((*t.data)[:index], (*t.data)[index+1:]...)
+			*t.data = append((*t.data)[:index], (*t.data)[index + 1:]...)
 		}
 	}
 	go t.save()
@@ -324,21 +328,25 @@ func main() {
 
 	humans := People{People: entries}
 
-	fmt.Print("++++++++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("Select by key Vasya:")
 	tmp := humans.selectByKey("Vasya")
-	fmt.Printf("Age: %2d\n", tmp)
+	fmt.Println(tmp)
+
 	humans.updateByKey("Vasya", 34)
-	fmt.Print("++++++++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("Update by key Vasya:")
 	tmp = humans.selectByKey("Vasya")
-	fmt.Printf("Age: %2d\n", tmp)
+	fmt.Println(tmp)
+
+	fmt.Println("Delete by key Vasya(should return nothing):")
 	humans.deleteByKey("Vasya")
-	fmt.Print("++++++++++++++++++++++++++++++++++++++++++++")
 	tmp = humans.selectByKey("Vasya")
-	fmt.Printf("Age: %2d\n", tmp)
+	fmt.Println(tmp)
+
+	fmt.Println("Adding with key Vasya:")
 	humans.addItem("Vasya", 25)
-	fmt.Print("++++++++++++++++++++++++++++++++++++++++++++")
 	tmp = humans.selectByKey("Vasya")
-	fmt.Printf("Age: %2d\n", tmp)
+	fmt.Println(tmp)
+
 	res := People{People: entries}
 	fileToWrite, err := os.Create("result.xml")
 
@@ -348,10 +356,12 @@ func main() {
 	}
 	FlushDatabase(fileToWrite, res)
 
+	fmt.Println("Printing loaded data from xml:")
+
 	for _, person := range humans.People {
 		// index is the index where we are
 		// element is the element from someSlice for where we are
-		fmt.Printf("Name: %6s  Age: %2d\n", person.Name, person.Age)
+		fmt.Println(person)
 	}
 	// Display The first strap
 }
