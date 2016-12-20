@@ -242,35 +242,35 @@ func (t *table) select_(key string) []string {
 	return selecting_data
 }
 
-func (p *People) selectByKey(key string) []int {
+func (p *People) selectByKey(key name) []int {
 	selecting_data := []int{}
 
 	for _, item := range p.People {
-		if item.Name == key {
+		if item.Name == name {
 			selecting_data = append(selecting_data, item.Age)
 		}
 	}
 	return selecting_data
 }
 
-func (p *People) deleteByKey(key string) {
+func (p *People) deleteByKey(name string) {
 	for index := 0; index < len(p.People); index++ {
-		if p.People[index].Name == key {
+		if p.People[index].Name == name {
 			p.People = append((p.People)[:index], (p.People)[index+1:]...)
 		}
 	}
 }
 
-func (p *People) updateByKey(key string, value int) {
+func (p *People) updateByKey(name string, age int) {
 	for index := 0; index < len(p.People); index++ {
-		if p.People[index].Name == key {
-			p.People[index].Age = value
+		if p.People[index].Name == name {
+			p.People[index].Age = age
 		}
 	}
 }
 
-func (p *People) addItem(key string, value int) {
-	human := Person{Name: key, Age: value}
+func (p *People) addItem(name string, age int) {
+	human := Person{Name: name, Age: age}
 	p.People = append(p.People, human)
 }
 
