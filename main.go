@@ -5,14 +5,14 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/csv"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
-	"encoding/xml"
-	"path/filepath"
 	"sync"
 )
 
@@ -21,14 +21,14 @@ type cache struct {
 }
 
 type Person struct {
-	XMLName xml.Name `xml:"person"`;
-	Name    string   `xml:"name"`;
-	Age     int   `xml:"age"`;
+	XMLName xml.Name `xml:"person"`
+	Name    string   `xml:"name"`
+	Age     int      `xml:"age"`
 }
 
 type People struct {
-	XMLName xml.Name   `xml:"people"`;
-	People  []Person `xml:"person"`;
+	XMLName xml.Name `xml:"people"`
+	People  []Person `xml:"person"`
 }
 
 func ReadEntries(reader io.Reader) ([]Person, error) {
@@ -40,7 +40,7 @@ func ReadEntries(reader io.Reader) ([]Person, error) {
 	return people.People, nil
 }
 
-func FlushDatabase(writer io.Writer, xmlEntries People) (error) {
+func FlushDatabase(writer io.Writer, xmlEntries People) error {
 	if err := xml.NewEncoder(writer).Encode(xmlEntries); err != nil {
 		return err
 	}
@@ -229,6 +229,7 @@ func (t *table) insert_(key string, value string) {
 func (t *table) additem(value []string) {
 	*t.data = append(*t.data, value)
 }
+
 func (t *table) select_(key string) []string {
 	selecting_data := []string{}
 	fmt.Println(*t.data)
@@ -241,10 +242,42 @@ func (t *table) select_(key string) []string {
 	return selecting_data
 }
 
+func (p *People) selectByKey(key name) []int {
+	selecting_data := []int{}
+
+	for _, item := range p.People {
+		if item.Name == name {
+			selecting_data = append(selecting_data, item.Age)
+		}
+	}
+	return selecting_data
+}
+
+func (p *People) deleteByKey(name string) {
+	for index := 0; index < len(p.People); index++ {
+		if p.People[index].Name == name {
+			p.People = append((p.People)[:index], (p.People)[index+1:]...)
+		}
+	}
+}
+
+func (p *People) updateByKey(name string, age int) {
+	for index := 0; index < len(p.People); index++ {
+		if p.People[index].Name == name {
+			p.People[index].Age = age
+		}
+	}
+}
+
+func (p *People) addItem(name string, age int) {
+	human := Person{Name: name, Age: age}
+	p.People = append(p.People, human)
+}
+
 func (t *table) delete_(key string) {
 	for index := 0; index < len(*t.data); index++ {
 		if (*t.data)[index][0] == key {
-			*t.data = append((*t.data)[:index], (*t.data)[index + 1:]...)
+			*t.data = append((*t.data)[:index], (*t.data)[index+1:]...)
 		}
 	}
 	go t.save()
@@ -289,6 +322,23 @@ func main() {
 
 	entries = append(entries, a)
 
+	humans := People{People: entries}
+
+	fmt.Print("++++++++++++++++++++++++++++++++++++++++++++")
+	tmp := humans.selectByKey("Vasya")
+	fmt.Printf("Age: %2d\n", tmp)
+	humans.updateByKey("Vasya", 34)
+	fmt.Print("++++++++++++++++++++++++++++++++++++++++++++")
+	tmp = humans.selectByKey("Vasya")
+	fmt.Printf("Age: %2d\n", tmp)
+	humans.deleteByKey("Vasya")
+	fmt.Print("++++++++++++++++++++++++++++++++++++++++++++")
+	tmp = humans.selectByKey("Vasya")
+	fmt.Printf("Age: %2d\n", tmp)
+	humans.addItem("Vasya", 25)
+	fmt.Print("++++++++++++++++++++++++++++++++++++++++++++")
+	tmp = humans.selectByKey("Vasya")
+	fmt.Printf("Age: %2d\n", tmp)
 	res := People{People: entries}
 	fileToWrite, err := os.Create("result.xml")
 
@@ -298,7 +348,7 @@ func main() {
 	}
 	FlushDatabase(fileToWrite, res)
 
-	for _, person := range entries {
+	for _, person := range humans.People {
 		// index is the index where we are
 		// element is the element from someSlice for where we are
 		fmt.Printf("Name: %6s  Age: %2d\n", person.Name, person.Age)
