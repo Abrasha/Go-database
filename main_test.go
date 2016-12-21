@@ -7,62 +7,125 @@ import "bufio"
 import "time"
 import "strings"
 
+const (
+	MESSAGE_OK = "OK"
+	MESSAGE_EMPTY = ""
+)
+
+func Sleep() {
+	time.Sleep(100 * time.Millisecond)
+}
+
 func Test(t *testing.T) {
 
 	go main()
-	time.Sleep(100 * time.Millisecond)
-	fmt.Println("test starting")
+	Sleep()
+	fmt.Println("Starting tests")
 	conn, _ := net.Dial("tcp", "127.0.0.1:8888")
-	fmt.Println("send insert")
-	// read in input from stdin
-	text := "set Izya eq 19"
-	// send to socket
-	fmt.Fprintf(conn, text)
-	fmt.Println("send select")
-	time.Sleep(100 * time.Millisecond)
 
-	text = "get Izya"
+	// Test insert START
+	fmt.Println("Testing insert method")
+	fmt.Fprint(conn, "set Izya eq 19\n")
+	Sleep()
 
-	// send to socket
-	fmt.Fprintf(conn, text)
-	fmt.Println("listen")
 	message, _ := bufio.NewReader(conn).ReadString('\n')
-	time.Sleep(100 * time.Millisecond)
+	Sleep()
 
-	fmt.Print("Message from server:" + message + "end")
+	fmt.Println("Response:" + message)
 	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
-	fmt.Print("Message from server:" + message + "end")
+	fmt.Println("Cleaned response:" + message)
 
-	if message != "19" {
-		t.Error("select return wrong string")
-
+	if message != MESSAGE_OK {
+		t.Error("message = " + message)
+		t.Error("expected = " + MESSAGE_OK)
+		t.Error("Insert not passed")
 	}
-	time.Sleep(100 * time.Millisecond)
+	// Test insert END
 
-	fmt.Fprintf(conn, "update Izya set 23")
-	time.Sleep(100 * time.Millisecond)
-	fmt.Fprintf(conn, "get Izya")
+	// Test get START
+	fmt.Fprint(conn, "get Izya")
+	fmt.Println("listen")
+	message, _ = bufio.NewReader(conn).ReadString('\n')
+	Sleep()
+
+	fmt.Println("Response:" + message)
+	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
+	fmt.Println("Cleaned response:" + message)
+
+	expected := strings.Replace(Person{Name:"Izya", Age: 19}.String(), " ", "", -1)
+	if message != expected {
+		t.Error("message = " + message)
+		t.Error("expected = " + expected)
+		t.Error("Select not passed")
+	}
+	Sleep()
+	// Test get END
+
+	// Test update START
+	fmt.Fprint(conn, "update Izya set 23\n")
+	Sleep()
+
+	message, _ = bufio.NewReader(conn).ReadString('\n')
+	Sleep()
+
+	fmt.Println("Response:" + message)
+	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
+	fmt.Println("Cleaned response:" + message)
+
+	if message != MESSAGE_OK {
+		t.Error("message = " + message)
+		t.Error("expected = " + MESSAGE_OK)
+		t.Error("Update not passed")
+	}
+	// Test update END
+
+	// Test get START
+	fmt.Fprint(conn, "get Izya\n")
+	Sleep()
+
+	message, _ = bufio.NewReader(conn).ReadString('\n')
+	Sleep()
+
+	fmt.Println("Response:" + message)
+	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
+	fmt.Println("Cleaned response:" + message)
+
+	expected = strings.Replace(Person{Name:"Izya", Age: 23}.String(), " ", "", -1)
+	if message != expected {
+		t.Error("message = " + message)
+		t.Error("expected = " + expected)
+		t.Error("Get after update not passed")
+	}
+	Sleep()
+	// Test get END
+
+	// Test delete START
+	fmt.Fprint(conn, "delete Izya")
+	Sleep()
 
 	message, _ = bufio.NewReader(conn).ReadString('\n')
 	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
-	if message != "23" {
-		t.Error("update works wrong")
-
+	if message != MESSAGE_OK {
+		t.Error("message = " + message)
+		t.Error("expected = " + MESSAGE_OK)
+		t.Error("Detele not passed")
 	}
-	time.Sleep(100 * time.Millisecond)
+	// Test delete END
 
-	fmt.Fprintf(conn, "delete Izya")
-	time.Sleep(100 * time.Millisecond)
-	fmt.Fprintf(conn, "get Izya")
+	// Test get after delete START
+	fmt.Fprint(conn, "get Izya")
 
 	message, _ = bufio.NewReader(conn).ReadString('\n')
 	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
-	if message != "" {
-		t.Error("delete works wrong")
-
+	if message != MESSAGE_EMPTY {
+		t.Error("message = " + message)
+		t.Error("expected = " + MESSAGE_EMPTY)
+		t.Error("Detele not passed")
 	}
+	// Test get after delete END
 
-	fmt.Fprintf(conn, "exit")
 
-	fmt.Println("OK")
+	fmt.Fprint(conn, "exit")
+
+	fmt.Println("Test passed successfully")
 }

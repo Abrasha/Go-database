@@ -177,6 +177,7 @@ func handleRequest(command string, fs *FileSystem, conn net.Conn, p *People) {
 			age, err := strconv.Atoi(params[3])
 			handleError(err)
 			p.addItem(params[1], age)
+			conn.Write([]byte("OK\n"))
 			go fs.FlushDatabase(*p)
 		} else {
 			conn.Write([]byte(string("Your command didn't match the pattern\n")))
@@ -198,6 +199,7 @@ func handleRequest(command string, fs *FileSystem, conn net.Conn, p *People) {
 		delete_regex := regexp.MustCompile(DELETE_REGEX)
 		if delete_regex.MatchString(command) {
 			p.deleteByKey(params[1])
+			conn.Write([]byte("OK\n"))
 			go fs.FlushDatabase(*p)
 		} else {
 			conn.Write([]byte(string("Your command didn't match the pattern\n")))
@@ -210,6 +212,7 @@ func handleRequest(command string, fs *FileSystem, conn net.Conn, p *People) {
 			age, err := strconv.Atoi(params[3])
 			handleError(err)
 			p.updateByKey(params[1], age)
+			conn.Write([]byte("OK\n"))
 			go fs.FlushDatabase(*p)
 		} else {
 			conn.Write([]byte(string("Your command didn't match the pattern\n")))
