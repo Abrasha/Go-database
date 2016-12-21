@@ -15,13 +15,14 @@ func Test(t *testing.T) {
 	conn, _ := net.Dial("tcp", "127.0.0.1:8888")
 	fmt.Println("send insert")
 	// read in input from stdin
-	text := "insert 222 9 into test_table\n"
+	text := "set Izya eq 19"
 	// send to socket
 	fmt.Fprintf(conn, text)
 	fmt.Println("send select")
 	time.Sleep(100 * time.Millisecond)
 
-	text = "select 222 from test_table\n"
+	text = "get Izya"
+
 	// send to socket
 	fmt.Fprintf(conn, text)
 	fmt.Println("listen")
@@ -32,27 +33,27 @@ func Test(t *testing.T) {
 	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
 	fmt.Print("Message from server:" + message + "end")
 
-	if message != "9" {
+	if message != "19" {
 		t.Error("select return wrong string")
 
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	fmt.Fprintf(conn, "update 222 to 10 in test_table\n")
+	fmt.Fprintf(conn, "update Izya set 23")
 	time.Sleep(100 * time.Millisecond)
-	fmt.Fprintf(conn, "select 222 from test_table\n")
+	fmt.Fprintf(conn, "get Izya")
 
 	message, _ = bufio.NewReader(conn).ReadString('\n')
 	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
-	if message != "10" {
+	if message != "23" {
 		t.Error("update works wrong")
 
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	fmt.Fprintf(conn, "delete 222 in test_table\n")
+	fmt.Fprintf(conn, "delete Izya")
 	time.Sleep(100 * time.Millisecond)
-	fmt.Fprintf(conn, "select 222 from test_table\n")
+	fmt.Fprintf(conn, "get Izya")
 
 	message, _ = bufio.NewReader(conn).ReadString('\n')
 	message = strings.Replace(strings.Replace(message, " ", "", -1), "\n", "", -1)
@@ -61,7 +62,7 @@ func Test(t *testing.T) {
 
 	}
 
-	fmt.Fprintf(conn, "exit 1")
+	fmt.Fprintf(conn, "exit")
 
 	fmt.Println("OK")
 }
